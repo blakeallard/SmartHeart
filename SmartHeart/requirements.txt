@@ -7,3 +7,4 @@ pyserial
 Flask
 Flask-SQLAlchemy
 psycopg2-binary
+werkzeug
