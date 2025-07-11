@@ -4,3 +4,6 @@ eventlet
 joblib
 scikit-learn
 pyserial
+Flask
+Flask-SQLAlchemy
+psycopg2-binary
