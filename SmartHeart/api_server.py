@@ -90,21 +90,30 @@ def login():
     else:
         return jsonify({"error": "❌ Invalid credentials"}), 401
 
-@app.route("/submit-reading", methods=["POST"])
+@app.route('/submit-reading', methods=['POST'])
 def submit_reading():
     data = request.json
     user_id = data.get("user_id")
     bpm = data.get("bpm")
     spo2 = data.get("spo2")
-    timestamp = data.get("timestamp")
 
-    if not all([user_id, bpm, spo2, timestamp]):
-        return jsonify({"error": "Missing fields"}), 400
+    if not all([user_id, bpm, spo2]):
+        return jsonify({"error": "Missing required fields"}), 400
 
-    new_reading = Reading(user_id=user_id, bpm=bpm, spo2=spo2, timestamp=timestamp)
+    new_reading = HealthReading(user_id=user_id, bpm=bpm, spo2=spo2)
     db.session.add(new_reading)
     db.session.commit()
-    return jsonify({"message": "✅ Reading saved"}), 201
+
+    # Append to CSV
+    csv_path = "readings.csv"
+    write_header = not os.path.exists(csv_path)
+    with open(csv_path, "a", newline="") as f:
+        writer = csv.writer(f)
+        if write_header:
+            writer.writerow(["user_id", "bpm", "spo2"])
+        writer.writerow([user_id, bpm, spo2])
+
+    return jsonify({"message": "Reading submitted successfully"})
 
 @app.route("/get-readings", methods=["GET"])
 def get_readings():
@@ -137,24 +146,22 @@ def predict():
     prediction = model.predict([[bpm, spo2]])[0]
     return jsonify({"prediction": prediction})
 
-@app.route("/latest-data", methods=["GET"])
-def latest_data():
-    if not os.path.exists(CSV_PATH):
-        return jsonify({"error": "No CSV data found"}), 404
+@app.route('/latest-reading', methods=['GET'])
+def latest_reading():
+    csv_path = "readings.csv"
+    if not os.path.exists(csv_path):
+        return jsonify({"error": "CSV file not found"}), 404
 
-    try:
-        with open(CSV_PATH, "r") as file:
-            reader = csv.DictReader(file)
-            rows = list(reader)
-            if not rows:
-                return jsonify({"error": "CSV is empty"}), 404
-            last_row = rows[-1]
-            return jsonify({
-                "bpm": int(last_row["BPM"]),
-                "spo2": int(last_row.get("SpO2", 98))
-            })
-    except Exception as e:
-        return jsonify({"error": f"Failed to read CSV: {e}"}), 500
+    with open(csv_path, "r") as f:
+        lines = f.readlines()
+        if len(lines) <= 1:
+            return jsonify({"error": "No readings found"}), 404
+        last_line = lines[-1].strip().split(",")
+        return jsonify({
+            "user_id": last_line[0],
+            "bpm": last_line[1],
+            "spo2": last_line[2]
+        })
 
 # Serial data thread for waveform broadcasting
 def stream_waveform_data():
