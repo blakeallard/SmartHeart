@@ -65,22 +65,25 @@ def predict():
 
 @app.route("/latest-data", methods=["GET"])
 def latest_data():
-    if not os.path.exists(CSV_PATH):
-        return jsonify({"error": "No CSV data found"}), 404
+    user_id = request.args.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Missing user_id"}), 400
 
-    try:
-        with open(CSV_PATH, "r") as file:
-            reader = csv.DictReader(file)
-            rows = list(reader)
-            if not rows:
-                return jsonify({"error": "CSV is empty"}), 404
-            last_row = rows[-1]
-            return jsonify({
-                "bpm": int(last_row["BPM"]),
-                "spo2": int(last_row.get("SpO2", 98))
-            })
-    except Exception as e:
-        return jsonify({"error": f"Failed to read CSV: {e}"}), 500
+    latest = (
+        Reading.query
+        .filter_by(user_id=user_id)
+        .order_by(Reading.timestamp.desc())
+        .first()
+    )
+
+    if latest is None:
+        return jsonify({"error": "No readings found"}), 404
+
+    return jsonify({
+        "bpm": latest.bpm,
+        "spo2": latest.spo2,
+        "timestamp": latest.timestamp
+    }), 200
     
 @app.route("/signup", methods=["POST"])
 def signup():
