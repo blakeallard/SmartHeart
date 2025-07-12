@@ -90,30 +90,39 @@ def login():
     else:
         return jsonify({"error": "❌ Invalid credentials"}), 401
 
-@app.route('/submit-reading', methods=['POST'])
+@app.route("/submit-reading", methods=["POST"])
 def submit_reading():
     data = request.json
     user_id = data.get("user_id")
     bpm = data.get("bpm")
     spo2 = data.get("spo2")
+    timestamp = data.get("timestamp")
 
-    if not all([user_id, bpm, spo2]):
-        return jsonify({"error": "Missing required fields"}), 400
+    if not all([user_id, bpm, spo2, timestamp]):
+        return jsonify({"error": "Missing fields"}), 400
 
-    new_reading = HealthReading(user_id=user_id, bpm=bpm, spo2=spo2)
+    # Save to database
+    new_reading = Reading(user_id=user_id, bpm=bpm, spo2=spo2, timestamp=timestamp)
     db.session.add(new_reading)
     db.session.commit()
 
     # Append to CSV
-    csv_path = "readings.csv"
-    write_header = not os.path.exists(csv_path)
-    with open(csv_path, "a", newline="") as f:
-        writer = csv.writer(f)
-        if write_header:
-            writer.writerow(["user_id", "bpm", "spo2"])
-        writer.writerow([user_id, bpm, spo2])
+    try:
+        file_exists = os.path.isfile(CSV_PATH)
+        with open(CSV_PATH, mode="a", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=["UserID", "BPM", "SpO2", "Timestamp"])
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow({
+                "UserID": user_id,
+                "BPM": bpm,
+                "SpO2": spo2,
+                "Timestamp": timestamp
+            })
+    except Exception as e:
+        print(f"⚠️ Error writing to CSV: {e}")
 
-    return jsonify({"message": "Reading submitted successfully"})
+    return jsonify({"message": "✅ Reading saved"}), 201
 
 @app.route("/get-readings", methods=["GET"])
 def get_readings():
