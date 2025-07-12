@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: smartheart-api
+    env: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python api_server.py"
+    envVars:
+      - key: DATABASE_URL
+        value: postgresql://smartheart_db_user:oXyFH5b48Q78PLZtc7xiY7hIAkLGh1PJ@dpg-d1oq4pjuibrs73d2b8ag-a:5432/smartheart_db
