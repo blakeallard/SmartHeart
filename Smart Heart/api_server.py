@@ -16,8 +16,8 @@ import serial
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
 db = SQLAlchemy(app)
+
 class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
@@ -39,7 +39,7 @@ CSV_PATH = "bpm_log.csv"
 try:
     model = joblib.load("model.pkl")
 except Exception as e:
-    print("⚠️ Could not load model.pkl:", e)
+    print("Could not load model.pkl:", e)
     model = None
 
 @app.route("/")
@@ -100,10 +100,10 @@ def signup():
         new_user = User(username=username, password=hashed_pw)
         db.session.add(new_user)
         db.session.commit()
-        return jsonify({"message": "✅ Signup successful"}), 201
+        return jsonify({"message": "Signup successful"}), 201
     except IntegrityError:
         db.session.rollback()
-        return jsonify({"error": "❌ Username already exists"}), 409
+        return jsonify({"error": "Username already exists"}), 409
 
 
 @app.route("/login", methods=["POST"])
@@ -118,9 +118,9 @@ def login():
     user = User.query.filter_by(username=username).first()
 
     if user and check_password_hash(user.password, password):
-        return jsonify({"message": "✅ Login successful", "user_id": user.id, "username": username}), 200
+        return jsonify({"message": "Login successful", "user_id": user.id, "username": username}), 200
     else:
-        return jsonify({"error": "❌ Invalid credentials"}), 401
+        return jsonify({"error": "Invalid credentials"}), 401
         
 @app.route("/submit-reading", methods=["POST"])
 def submit_reading():
@@ -137,10 +137,10 @@ def submit_reading():
         reading = Reading(user_id=user_id, bpm=bpm, spo2=spo2, timestamp=timestamp)
         db.session.add(reading)
         db.session.commit()
-        return jsonify({"message": "✅ Reading saved"}), 201
+        return jsonify({"message": "Reading saved"}), 201
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": f"❌ Failed to save reading: {e}"}), 500
+        return jsonify({"error": f"Failed to save reading: {e}"}), 500
     
 @app.route("/get-readings", methods=["GET"])
 def get_readings():
@@ -160,7 +160,7 @@ def get_readings():
 def stream_waveform_data():
     try:
         ser = serial.Serial('/dev/cu.usbmodem1101', 115200)
-        print("✅ Serial port opened successfully")
+        print("Serial port opened successfully!")
     except Exception as e:
         ser = None
         print(f"⚠️ Serial connection failed: {e}")
@@ -180,7 +180,7 @@ def stream_waveform_data():
                 except ValueError:
                     continue  # Ignore malformed lines
         except Exception as e:
-            print(f"⚠️ Error reading from serial: {e}")
+            print(f"Error reading from serial: {e}")
             break  # Prevent infinite loop if serial disconnects
 
 def init_db():
@@ -188,7 +188,7 @@ def init_db():
         db.create_all()
 
 if __name__ == "__main__":
-    print("🚀 Starting Flask API server with WebSocket...")
+    print("Starting Flask API server with WebSocket...")
     init_db()
     threading.Thread(target=stream_waveform_data, daemon=True).start()
     socketio.run(app, host="0.0.0.0", port=5051)
