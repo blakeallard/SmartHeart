@@ -1,4 +1,5 @@
 import os
+print("DEBUG: DATABASE_URL =", os.environ.get("DATABASE_URL"))  # ← ADD THIS
 import eventlet
 eventlet.monkey_patch()
 
