@@ -1,47 +1,69 @@
+# Standard library imports
 import os
-print("DEBUG: DATABASE_URL =", os.environ.get("DATABASE_URL"))  # ← ADD THIS
-import eventlet
-eventlet.monkey_patch()
-
-from flask          import Flask, request, jsonify
-from flask_socketio import SocketIO
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.exc import IntegrityError
-from werkzeug.security import generate_password_hash, check_password_hash
-import joblib
-import csv
 import threading
 import time
 import serial
+import csv
 
+# Web server & API libraries
+from flask             import Flask, request, jsonify
+from flask_socketio    import SocketIO
+from flask_sqlalchemy  import SQLAlchemy
+from sqlalchemy.exc    import IntegrityError
+from werkzeug.security import generate_password_hash, check_password_hash
+
+# ML model loading
+import joblib
+
+# Patch standard libraries to make them cooperative with eventlet (for WebSocket support)
+import eventlet
+eventlet.monkey_patch()
+
+# Debug: Print environment variable for database URL
+print("DEBUG: DATABASE_URL =", os.environ.get("DATABASE_URL"))
+
+# Initialize Flask app
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")  # PostgreSQL DB URL
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+# Initialize database connection
 db = SQLAlchemy(app)
 
+# Enable WebSocket support
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Path for CSV backup/logging
+CSV_PATH = "bpm_log.csv"
+
+# ---------------------- DATABASE MODELS ----------------------
+
+# User table model
 class User(db.Model):
     __tablename__ = 'users'
-    id = db.Column(db.Integer, primary_key=True)
+    id       = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
 
+# Health reading table model
 class Reading(db.Model):
     __tablename__ = 'readings'
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
-    bpm = db.Column(db.Integer)
-    spo2 = db.Column(db.Integer)
+    id        = db.Column(db.Integer, primary_key=True)
+    user_id   = db.Column(db.Integer, db.ForeignKey('users.id'))
+    bpm       = db.Column(db.Integer)
+    spo2      = db.Column(db.Integer)
     timestamp = db.Column(db.String)
-socketio = SocketIO(app, cors_allowed_origins="*")
 
-CSV_PATH = "bpm_log.csv"
+# ---------------------- MODEL LOADING ----------------------
 
-# Load model if available
+# Load ML model (trained with joblib)
 try:
     model = joblib.load("model.pkl")
 except Exception as e:
     print("Could not load model.pkl:", e)
     model = None
+
+# ---------------------- API ROUTES ----------------------
 
 @app.route("/")
 def home():
@@ -49,23 +71,27 @@ def home():
 
 @app.route("/predict", methods=["POST"])
 def predict():
+    # Receive bpm and spo2 from frontend
     data = request.json
     print("Incoming data:", data)
 
     bpm  = data.get("bpm")
     spo2 = data.get("spo2")
 
+    # Validate input
     if bpm is None or spo2 is None:
         return jsonify({"error": "Missing bpm or spo2"}), 400
 
     if model is None:
         return jsonify({"error": "Model not loaded"}), 500
 
+    # Make prediction using trained ML model
     prediction = model.predict([[bpm, spo2]])[0]
     return jsonify({"prediction": prediction})
 
 @app.route("/latest-data", methods=["GET"])
 def latest_data():
+    # Fetch latest reading for given user_id
     user_id = request.args.get("user_id")
     if not user_id:
         return jsonify({"error": "Missing user_id"}), 400
@@ -85,9 +111,10 @@ def latest_data():
         "spo2": latest.spo2,
         "timestamp": latest.timestamp
     }), 200
-    
+
 @app.route("/signup", methods=["POST"])
 def signup():
+    # Register a new user
     data = request.json
     username = data.get("username")
     password = data.get("password")
@@ -106,9 +133,9 @@ def signup():
         db.session.rollback()
         return jsonify({"error": "Username already exists"}), 409
 
-
 @app.route("/login", methods=["POST"])
 def login():
+    # Authenticate user
     data = request.json
     username = data.get("username")
     password = data.get("password")
@@ -119,16 +146,21 @@ def login():
     user = User.query.filter_by(username=username).first()
 
     if user and check_password_hash(user.password, password):
-        return jsonify({"message": "Login successful", "user_id": user.id, "username": username}), 200
+        return jsonify({
+            "message": "Login successful",
+            "user_id": user.id,
+            "username": username
+        }), 200
     else:
         return jsonify({"error": "Invalid credentials"}), 401
-        
+
 @app.route("/submit-reading", methods=["POST"])
 def submit_reading():
+    # Save new health reading
     data = request.json
-    user_id = data.get("user_id")
-    bpm = data.get("bpm")
-    spo2 = data.get("spo2")
+    user_id   = data.get("user_id")
+    bpm       = data.get("bpm")
+    spo2      = data.get("spo2")
     timestamp = data.get("timestamp")
 
     if not all([user_id, bpm, spo2, timestamp]):
@@ -142,9 +174,10 @@ def submit_reading():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": f"Failed to save reading: {e}"}), 500
-    
+
 @app.route("/get-readings", methods=["GET"])
 def get_readings():
+    # Fetch last 50 readings for a user
     user_id = request.args.get("user_id")
 
     if not user_id:
@@ -157,39 +190,44 @@ def get_readings():
     except Exception as e:
         return jsonify({"error": f"Failed to fetch readings: {e}"}), 500
 
+# ---------------------- REAL-TIME STREAMING ----------------------
 
 def stream_waveform_data():
+    # Background thread: Reads serial data from board and emits over WebSocket
     try:
         ser = serial.Serial('/dev/cu.usbmodem1101', 115200)
         print("Serial port opened successfully!")
     except Exception as e:
-        ser = None
-        print(f"⚠️ Serial connection failed: {e}")
-        return  # Exit the thread gracefully
+        print(f"Serial connection failed: {e}")
+        return
 
     while True:
         try:
             line = ser.readline().decode().strip()
             if line:
                 try:
-                    # Assume sensor sends comma-separated "bpm,spo2"
+                    # Parse "bpm,spo2" values from serial input
                     bpm_val, spo2_val = map(int, line.split(","))
                     socketio.emit("waveform", {
                         "bpm": bpm_val,
                         "spo2": spo2_val
                     })
                 except ValueError:
-                    continue  # Ignore malformed lines
+                    continue  # Skip malformed lines
         except Exception as e:
             print(f"Error reading from serial: {e}")
-            break  # Prevent infinite loop if serial disconnects
+            break
+
+# ---------------------- DATABASE SETUP ----------------------
 
 def init_db():
     with app.app_context():
-        db.create_all()
+        db.create_all()  # Creates tables if they don’t exist
+
+# ---------------------- MAIN ENTRY POINT ----------------------
 
 if __name__ == "__main__":
     print("Starting Flask API server with WebSocket...")
     init_db()
-    threading.Thread(target=stream_waveform_data, daemon=True).start()
+    threading.Thread(target=stream_waveform_data, daemon=True).start()  # Start waveform thread
     socketio.run(app, host="0.0.0.0", port=5051)
