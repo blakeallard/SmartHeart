@@ -65,7 +65,7 @@ def predict():
     X_input = pd.DataFrame([[bpm, spo2]], columns=['BPM', 'SpO2'])  # match column names used in training
     prediction = model.predict(X_input)[0]
 
-    return jsonify({"prediction": prediction})
+    return jsonify({"prediction": int(prediction)})
 
 @app.route("/latest-data", methods=["GET"])
 def latest_data():
