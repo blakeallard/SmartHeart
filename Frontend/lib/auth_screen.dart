@@ -22,8 +22,7 @@ class _AuthScreenState extends State<AuthScreen>
   {
     // Determine URL based on login or signup
     final url      = Uri.parse("https://smartheart.onrender.com/${isLogin ? 'login' : 'signup'}");
-    final response = await http.post
-    (
+    final response = await http.post(
       url,
       headers: {"Content-Type": "application/json"},
       body: jsonEncode
@@ -33,6 +32,8 @@ class _AuthScreenState extends State<AuthScreen>
       }),
     ); // end handleAuth http post
        // submits http post request to Flask API
+
+       Map<String, dynamic> data = {};
 
     try 
     {
