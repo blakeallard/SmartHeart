@@ -135,56 +135,60 @@ class _PredictionScreenState extends State<PredictionScreen>
   } // end fetchLatestDataFromDB
 
   // Send current reading to Flask API and get prediction
-  Future<void> sendPredictionRequest(int bpm, int spo2) async 
-  {
-    final predictUrl = Uri.parse('https://smartheart-backend.onrender.com/predict');
-    final readingUrl = Uri.parse('https://smartheart-backend.onrender.com/submit-reading');
+Future<void> sendPredictionRequest(int bpm, int spo2) async {
+  final predictUrl = Uri.parse('https://smartheart-backend.onrender.com/predict');
+  final readingUrl = Uri.parse('https://smartheart-backend.onrender.com/submit-reading');
 
-    try {
-      final response = await http.post(
-        predictUrl,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"bpm": bpm, "spo2": spo2}),
-      );
+  try {
+    final response = await http.post(
+      predictUrl,
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"bpm": bpm, "spo2": spo2}),
+    );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          result = "${data['prediction']}";
-        });
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final prediction = data['prediction'];  
 
-        // Send reading with user_id to DB
-        final prefs = await SharedPreferences.getInstance();
-        final userId = prefs.getInt('user_id');
-
-        if (userId != null) {
-          await http.post(
-            readingUrl,
-            headers: {"Content-Type": "application/json"},
-            body: jsonEncode({
-              "user_id": userId,
-              "bpm": bpm,
-              "spo2": spo2,
-              "timestamp": DateTime.now().toIso8601String(),
-            }),
-          );
+      setState(() {
+        if (prediction == 1) {
+          result = "Prediction: Healthy";
+        } else if (prediction == 0) {
+          result = "Prediction: Not Healthy";
         } else {
-          print("No user_id found in SharedPreferences");
+          result = "Prediction: Unknown";
         }
-      } else 
-      {
-        setState(() {
-          result = "Server Error: ${response.statusCode}";
-        });
+      });
+
+      // Send reading with user_id to DB
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getInt('user_id');
+
+      if (userId != null) {
+        await http.post(
+          readingUrl,
+          headers: {"Content-Type": "application/json"},
+          body: jsonEncode({
+            "user_id": userId,
+            "bpm": bpm,
+            "spo2": spo2,
+            "timestamp": DateTime.now().toIso8601String(),
+          }),
+        );
+      } else {
+        print("No user_id found in SharedPreferences");
       }
-    } catch (e) 
-    {
-      setState(() 
-      {
-        result = "Error: $e";
+    } else {
+      setState(() {
+        result = "Server Error: ${response.statusCode}";
       });
     }
-  } // end sendPredictionRequest
+  } catch (e) {
+    setState(() {
+      result = "Error: $e";
+    });
+  }
+}
 
   // Main UI build method
   @override
@@ -318,7 +322,15 @@ class _PredictionScreenState extends State<PredictionScreen>
                   const SizedBox(height: 20),
 
                   // Result or error text
-                  Text(result, style: const TextStyle(fontSize: 18, color: Colors.white70)),
+                  Text(
+                    result,
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: result.contains("Healthy")
+                          ? Colors.greenAccent
+                          : (result.contains("Not Healthy") ? Colors.redAccent : Colors.white70),
+                    ),
+                  ),
                 ],
               ),
             ),
