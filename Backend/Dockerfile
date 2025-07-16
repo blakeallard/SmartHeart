@@ -7,8 +7,8 @@ WORKDIR /app/Backend
 # Copy everything into /app (so we can access both Backend and other folders if needed)
 COPY . /app
 
-# Install dependencies from Backend/requirements.txt
-RUN pip install --no-cache-dir -r Backend/requirements.txt
+# Correct path now that we are in /app/Backend
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Expose the Flask port
 EXPOSE 5050
