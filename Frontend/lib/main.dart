@@ -58,7 +58,7 @@ class _PredictionScreenState extends State<PredictionScreen>
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
 
-    _pulseAnimation = Tween<double>(begin: 0.7, end: 1.2).animate(
+    _pulseAnimation = Tween<double>(begin: 0.9, end: 1.2).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
 
@@ -79,6 +79,14 @@ class _PredictionScreenState extends State<PredictionScreen>
           {
             waveformPoints.removeAt(0);
           }
+
+          double scaleMin = 0.9;
+          double scaleMax = bpm > 100 ? 1.3 : 1.1;
+          _pulseAnimation = Tween<double>(begin: scaleMin, end: scaleMax).animate(
+            CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+          );
+          _controller.duration = Duration(milliseconds: (60000 ~/ bpm).clamp(600, 2000));
+          if (!_controller.isAnimating) _controller.repeat(reverse: true);
         });
       }
     });
@@ -135,7 +143,22 @@ class _PredictionScreenState extends State<PredictionScreen>
   } // end fetchLatestDataFromDB
 
   // Send current reading to Flask API and get prediction
+bool _isSubmitting = false;           // add to your state
+int? _lastSubmittedBpm;
+int? _lastSubmittedSpo2;
+
 Future<void> sendPredictionRequest(int bpm, int spo2) async {
+  if (_isSubmitting) return;
+  if (bpm == _lastSubmittedBpm && spo2 == _lastSubmittedSpo2) {
+    print("Duplicate reading. Skipping submission.");
+    setState(() {
+      result = "Same reading already submitted.";
+    });
+    return;
+  }
+
+  setState(() => _isSubmitting = true);
+
   final predictUrl = Uri.parse('https://smartheart-backend.onrender.com/predict');
   final readingUrl = Uri.parse('https://smartheart-backend.onrender.com/submit-reading');
 
@@ -148,7 +171,7 @@ Future<void> sendPredictionRequest(int bpm, int spo2) async {
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      final prediction = data['prediction'];  
+      final prediction = data['prediction'];
 
       setState(() {
         if (prediction == 1) {
@@ -158,9 +181,12 @@ Future<void> sendPredictionRequest(int bpm, int spo2) async {
         } else {
           result = "Prediction: Unknown";
         }
+
+        // mark this reading as last submitted
+        _lastSubmittedBpm = bpm;
+        _lastSubmittedSpo2 = spo2;
       });
 
-      // Send reading with user_id to DB
       final prefs = await SharedPreferences.getInstance();
       final userId = prefs.getInt('user_id');
 
@@ -187,6 +213,8 @@ Future<void> sendPredictionRequest(int bpm, int spo2) async {
     setState(() {
       result = "Error: $e";
     });
+  } finally {
+    setState(() => _isSubmitting = false);
   }
 }
 
@@ -310,15 +338,24 @@ Future<void> sendPredictionRequest(int bpm, int spo2) async {
                   const SizedBox(height: 20),
 
                   // Submit to API button
-                  ElevatedButton(
+                  // Implemented with loading state and duplicate prevention
+                    ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent,
+                      backgroundColor: _isSubmitting ? Colors.grey : Colors.redAccent,
                       padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 16),
                     ),
-                    onPressed: () => sendPredictionRequest(bpm, spo2),
-                    child: const Text('Submit Data', style: TextStyle(fontSize: 18)),
-                  ),
-
+                    onPressed: _isSubmitting ? null : () => sendPredictionRequest(bpm, spo2),
+                    child: _isSubmitting
+                      ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                        )
+                      : const Text('Submit Data', style: TextStyle(fontSize: 18)),
+                    ),
                   const SizedBox(height: 20),
 
                   // Result or error text
