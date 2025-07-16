@@ -138,7 +138,12 @@ def submit_reading():
         return jsonify({"error": "Missing fields"}), 400
 
     try:
-        reading = Reading(user_id=user_id, bpm=bpm, spo2=spo2, timestamp=timestamp)
+        reading = Reading(
+            user_id=int(user_id),
+            bpm=int(bpm),
+            spo2=int(spo2),
+            timestamp=timestamp
+        )
         db.session.add(reading)
         db.session.commit()
         return jsonify({"message": "Reading saved"}), 201
