@@ -195,7 +195,10 @@ def stream_waveform_data():
 
 def init_db():
     with app.app_context():
+        print("[DEBUG] Initializaing database...")
         db.create_all()
+        print("[DEBUG] Database tables created.")
+
 
 if __name__ == "__main__":
     print("Starting Flask API server with WebSocket...")
