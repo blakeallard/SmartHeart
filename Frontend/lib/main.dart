@@ -107,7 +107,7 @@ class _PredictionScreenState extends State<PredictionScreen>
       return;
     }
 
-    final url = Uri.parse("https://smartheart.onrender.com/latest-data?user_id=$userId");
+    final url = Uri.parse("https://smartheart-backend.onrender.com/latest-data?user_id=$userId");
 
     try 
     {
@@ -137,8 +137,8 @@ class _PredictionScreenState extends State<PredictionScreen>
   // Send current reading to Flask API and get prediction
   Future<void> sendPredictionRequest(int bpm, int spo2) async 
   {
-    final predictUrl = Uri.parse('https://smartheart.onrender.com/predict');
-    final readingUrl = Uri.parse('https://smartheart.onrender.com/submit-reading');
+    final predictUrl = Uri.parse('https://smartheart-backend.onrender.com/predict');
+    final readingUrl = Uri.parse('https://smartheart-backend.onrender.com/submit-reading');
 
     try {
       final response = await http.post(
