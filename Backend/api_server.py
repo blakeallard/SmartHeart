@@ -199,14 +199,6 @@ def init_db():
         db.create_all()
         print("[DEBUG] Database tables created.")
 
-
-if __name__ == "__main__":
-    print("Starting Flask API server with WebSocket...")
-    init_db()
-    threading.Thread(target=stream_waveform_data, daemon=True).start()
-    port = int(os.environ.get("PORT", 5050))  # fallback to 5051 locally
-    socketio.run(app, host="0.0.0.0", port=port)
-
 @app.route("/init-db", methods=["POST"])
 def manual_init_db():
     try:
@@ -214,3 +206,10 @@ def manual_init_db():
         return jsonify({"message": "Database initialized"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+if __name__ == "__main__":
+    print("Starting Flask API server with WebSocket...")
+    init_db()
+    threading.Thread(target=stream_waveform_data, daemon=True).start()
+    port = int(os.environ.get("PORT", 5050))  # fallback to 5051 locally
+    socketio.run(app, host="0.0.0.0", port=port)
