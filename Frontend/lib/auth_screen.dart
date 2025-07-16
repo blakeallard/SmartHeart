@@ -18,71 +18,49 @@ class _AuthScreenState extends State<AuthScreen>
   final passwordController = TextEditingController();
   String message = "";
 
-  Future<void> handleAuth() async 
-  {
-    // Determine URL based on login or signup
-    final url      = Uri.parse("https://smartheart.onrender.com/${isLogin ? 'login' : 'signup'}");
+Future<void> handleAuth() async {
+  final url = Uri.parse("https://smartheart-backend.onrender.com/${isLogin ? 'login' : 'signup'}");
+
+  try {
+    // ✅ Submit the request to Flask API
     final response = await http.post(
       url,
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode
-      ({
+      body: jsonEncode({
         "username": usernameController.text,
         "password": passwordController.text,
       }),
-    ); // end handleAuth http post
-       // submits http post request to Flask API
+    );
 
-       Map<String, dynamic> data = {};
-
-    try 
-    {
-      // Parse JSON response
-      // decode the JSON response from the server in order to access its data
-  final data = jsonDecode(response.body);
-
-  if (response.statusCode == 200 || response.statusCode == 201) {
-    setState(() => message = data["message"] ?? "Success");
-
-    if (isLogin && data["user_id"] != null) 
-    {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt("user_id", data["user_id"]);
-      await prefs.setString("username", usernameController.text);
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => PredictionScreen()),
-      );
-    }
-  } else 
-  {
-    setState(() => message = data["error"] ?? "Something went wrong");
-  }
-} catch (e) 
-{
-  setState(() => message = "Invalid response: ${response.body}");
-}
+    // Decode JSON response only once
+    final data = jsonDecode(response.body);
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       setState(() => message = data["message"] ?? "Success");
 
-      // Save user_id to SharedPreferences if login
+      // Save user_id if login was successful
       if (isLogin && data["user_id"] != null) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setInt("user_id", data["user_id"]);
         await prefs.setString("username", usernameController.text);
 
-        // Navigate to PredictionScreen
+        // Navigate to Prediction screen
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => PredictionScreen()),
         );
       }
+
     } else {
+      // Error returned from backend
       setState(() => message = data["error"] ?? "Something went wrong");
     }
+
+  } catch (e) {
+    // Failed to decode or network error
+    setState(() => message = "Invalid response: $e");
   }
+}
 
   @override
   Widget build(BuildContext context) {

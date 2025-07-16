@@ -1,13 +1,13 @@
 # Use a lightweight Python image
 FROM python:3.11-slim
 
-# Set working directory in container
-WORKDIR /app
+# Set working directory to /app/Backend
+WORKDIR /app/Backend
 
-# Copy everything from current directory to /app in the container
+# Copy everything into /app (so we can access both Backend and other folders if needed)
 COPY . /app
 
-# Install dependencies
+# Install dependencies from Backend/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Expose the Flask port
