@@ -1,17 +1,17 @@
 # Use a lightweight Python image
 FROM python:3.11-slim
 
-# Set working directory to /app/Backend
-WORKDIR /app/Backend
+# Set working directory to /app
+WORKDIR /app
 
-# Copy everything into /app (so we can access both Backend and other folders if needed)
-COPY . /app
+# Copy everything into /app
+COPY . .
 
-# Correct path now that we are in /app/Backend
-RUN pip install --no-cache-dir -r requirements.txt
+# Install dependencies
+RUN pip install --no-cache-dir -r Backend/requirements.txt
 
 # Expose the Flask port
 EXPOSE 5050
 
 # Run the Flask app
-CMD ["python", "api_server.py"]
+CMD ["python", "Backend/api_server.py"]
