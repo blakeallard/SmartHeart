@@ -8,10 +8,10 @@ WORKDIR /app/Backend
 COPY . /app
 
 # Install dependencies from Backend/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r Backend/requirements.txt
 
 # Expose the Flask port
 EXPOSE 5050
 
 # Run the Flask app
-CMD ["python", "api_server.py"]
+CMD ["python", "Backend/api_server.py"]
