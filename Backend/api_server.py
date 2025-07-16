@@ -15,7 +15,7 @@ import serial
 import pandas as pd
 
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "postgresql://smartheart_db_user:oXyFH5b48Q78PLZtc7xiY7hIAkLGh1PJ@dpg-d1oq4pjuibrs73d2b8ag-a.oregon-postgres.render.com/smartheart_db")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
@@ -206,3 +206,11 @@ if __name__ == "__main__":
     threading.Thread(target=stream_waveform_data, daemon=True).start()
     port = int(os.environ.get("PORT", 5050))  # fallback to 5051 locally
     socketio.run(app, host="0.0.0.0", port=port)
+
+@app.route("/init-db", methods=["POST"])
+def manual_init_db():
+    try:
+        db.create_all()
+        return jsonify({"message": "Database initialized"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
