@@ -14,4 +14,4 @@ RUN pip install --no-cache-dir -r Backend/requirements.txt
 EXPOSE 5050
 
 # Run the Flask app
-CMD ["python", "Backend/api_server.py"]
+CMD ["python", "api_server.py"]
