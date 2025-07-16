@@ -149,6 +149,7 @@ def submit_reading():
         return jsonify({"message": "Reading saved"}), 201
     except Exception as e:
         db.session.rollback()
+        print(f"[ERROR] Failed to save reading: {e}")  # <--- Add this line
         return jsonify({"error": f"Failed to save reading: {e}"}), 500
     
 @app.route("/get-readings", methods=["GET"])
