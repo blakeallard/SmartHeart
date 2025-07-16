@@ -3,11 +3,11 @@ import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import 'auth_screen.dart';
 import 'account_screen.dart';
 
-void main() {
+void main() 
+{
   runApp(HeartMonitorApp());
 }
 
@@ -340,7 +340,8 @@ class WaveformPainter extends CustomPainter {
       ..color = Colors.redAccent
       ..strokeWidth = 2;
 
-    for (int i = 0; i < points.length - 1; i++) {
+    for (int i = 0; i < points.length - 1; i++) 
+    {
       final x1 = i * (size.width / points.length);
       final y1 = size.height - (points[i].toDouble() * size.height / 150);
       final x2 = (i + 1) * (size.width / points.length);
