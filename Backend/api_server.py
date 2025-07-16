@@ -38,7 +38,7 @@ CSV_PATH = "bpm_log.csv"
 
 # Load model if available
 try:
-    model = joblib.load("model.pkl")
+    model = joblib.load("Backend/model.pkl")
 except Exception as e:
     print("⚠️ Could not load model.pkl:", e)
     model = None
