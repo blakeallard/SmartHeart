@@ -1,6 +1,0 @@
-flask
-flask-socketio
-eventlet
-joblib
-scikit-learn
-pyserial
