@@ -59,7 +59,7 @@ class _PredictionScreenState extends State<PredictionScreen>
 
   Widget buildMonitoringButton() {
     String label = "Loading...";
-    VoidCallback onPressed = (){};
+    Future<void> Function()? onPressed;
 
     if (userId == null) {
       return ElevatedButton(
@@ -71,7 +71,7 @@ class _PredictionScreenState extends State<PredictionScreen>
   switch (monitorState) {
     case MonitorState.idle:
       label = "Start Monitoring";
-      onPressed = () {
+      onPressed = () async {
         socket.emit('start_monitoring', {'user_id': userId});
         setState(() => monitorState = MonitorState.monitoring);
       };
@@ -79,7 +79,7 @@ class _PredictionScreenState extends State<PredictionScreen>
 
     case MonitorState.monitoring:
       label = "Stop Monitoring";
-      onPressed = () {
+      onPressed = () async {
         socket.emit('stop_monitoring');
         setState(() => monitorState = MonitorState.finished);
       };
@@ -134,19 +134,23 @@ class _PredictionScreenState extends State<PredictionScreen>
 
   }
 
-  return ElevatedButton(
-    onPressed: onPressed,
-    child: _isFinalSubmit
-    ? const SizedBox(
-        width: 20,
-        height: 20,
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-          color: Colors.white,
-        ),
-      )
-    : Text(label),
-  );
+return ElevatedButton(
+  onPressed: onPressed != null
+      ? () async {
+          await onPressed!();
+        }
+      : null,
+  child: _isFinalSubmit
+      ? const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: Colors.white,
+          ),
+        )
+      : Text(label),
+);
 }
 
 

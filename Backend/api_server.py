@@ -155,9 +155,9 @@ def login():
 @app.route("/submit-reading", methods=["POST"])
 def submit_reading():
     data      = request.json
-    user_id   = data.get("user_id")
-    bpm       = data.get("bpm")
-    spo2      = data.get("spo2")
+    user_id   = int(data.get("user_id"))
+    bpm       = int(data.get("bpm"))
+    spo2      = int(data.get("spo2"))
     timestamp = data.get("timestamp")
 
     if not all([user_id, bpm, spo2, timestamp]):
@@ -175,7 +175,7 @@ def submit_reading():
         return jsonify({"message": "Reading saved"}), 201
     except Exception as e:
         db.session.rollback()
-        print(f"[ERROR] Failed to save reading: {e}")  # <--- Add this line
+        print(f"[ERROR] Failed to save reading: {e}")  
         return jsonify({"error": f"Failed to save reading: {e}"}), 500
 
 
