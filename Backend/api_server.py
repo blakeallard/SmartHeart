@@ -154,21 +154,21 @@ def login():
 # Submit a reading to the database
 @app.route("/submit-reading", methods=["POST"])
 def submit_reading():
-    data = request.json
-    user_id = data.get("user_id")
-    bpm = data.get("bpm")
-    spo2 = data.get("spo2")
+    data      = request.json
+    user_id   = data.get("user_id")
+    bpm       = data.get("bpm")
+    spo2      = data.get("spo2")
     timestamp = data.get("timestamp")
 
     if not all([user_id, bpm, spo2, timestamp]):
         return jsonify({"error": "Missing fields"}), 400
 
     try:
-        reading = Reading(
-            user_id=int(user_id),
-            bpm=int(bpm),
-            spo2=int(spo2),
-            timestamp=timestamp
+        reading       = Reading(
+            user_id   = int(user_id),
+            bpm       = int(bpm),
+            spo2      = int(spo2),
+            timestamp = timestamp
         )
         db.session.add(reading)
         db.session.commit()

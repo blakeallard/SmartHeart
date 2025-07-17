@@ -33,6 +33,8 @@ class HeartMonitorApp extends StatelessWidget {
   }
 }
 
+enum MonitorState { idle, monitoring, finished }
+
 // Main screen showing predictions and live bpm & sp02 data
 class PredictionScreen extends StatefulWidget {
   @override
@@ -40,14 +42,113 @@ class PredictionScreen extends StatefulWidget {
 }
 
 class _PredictionScreenState extends State<PredictionScreen>
+
     with SingleTickerProviderStateMixin {
+
+    MonitorState monitorState = MonitorState.idle;
+
+  bool _isFinalSubmit = false;
   String result = 'No prediction yet';
-  int bpm = 72;
+  int? userId;
+  int bpm  = 72;
   int spo2 = 98;
   late AnimationController _controller;
   late Animation<double> _pulseAnimation;
   late IO.Socket socket;
   List<int> waveformPoints = [];
+
+  Widget buildMonitoringButton() {
+    String label = "Loading...";
+    VoidCallback onPressed = (){};
+
+    if (userId == null) {
+      return ElevatedButton(
+        onPressed: null,
+        child: Text("Loading user..."),
+  );
+}
+
+  switch (monitorState) {
+    case MonitorState.idle:
+      label = "Start Monitoring";
+      onPressed = () {
+        socket.emit('start_monitoring', {'user_id': userId});
+        setState(() => monitorState = MonitorState.monitoring);
+      };
+      break;
+
+    case MonitorState.monitoring:
+      label = "Stop Monitoring";
+      onPressed = () {
+        socket.emit('stop_monitoring');
+        setState(() => monitorState = MonitorState.finished);
+      };
+      break;
+
+    case MonitorState.finished:
+  label = _isFinalSubmit ? "Submitting..." : "Submit Data";
+  onPressed = _isFinalSubmit ? null : () async {
+    if (userId == null) return;
+
+    setState(() => _isFinalSubmit = true);
+
+    final response = await http.post(
+      Uri.parse("https://smartheart-backend.onrender.com/submit-reading"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "user_id": userId,
+        "bpm": bpm,
+        "spo2": spo2,
+        "timestamp": DateTime.now().toIso8601String(),
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      setState(() {
+        monitorState = MonitorState.idle;
+        _isFinalSubmit = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✔️ Data submitted successfully'),
+          backgroundColor: Colors.green.shade700,
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } else {
+      setState(() => _isFinalSubmit = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Failed to submit data'),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  };
+  break;
+
+  }
+
+  return ElevatedButton(
+    onPressed: onPressed,
+    child: _isFinalSubmit
+    ? const SizedBox(
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: Colors.white,
+        ),
+      )
+    : Text(label),
+  );
+}
+
 
   @override
   void initState() {
@@ -106,7 +207,8 @@ class _PredictionScreenState extends State<PredictionScreen>
   Future<void> fetchLatestDataFromDB() async 
   {
     final prefs  = await SharedPreferences.getInstance();
-    final userId = prefs.getInt('user_id');
+    userId = prefs.getInt('user_id');
+
 
     if (userId == null) 
     {
@@ -339,8 +441,13 @@ Future<void> sendPredictionRequest(int bpm, int spo2) async {
 
                   const SizedBox(height: 20),
 
+
+                  buildMonitoringButton(),
+                  const SizedBox(height: 16),
+
                   // Submit to API button
                   // Implemented with loading state and duplicate prevention
+                  if (monitorState == MonitorState.idle) ...[
                     ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _isSubmitting ? Colors.grey : Colors.redAccent,
@@ -359,6 +466,7 @@ Future<void> sendPredictionRequest(int bpm, int spo2) async {
                       : const Text('Submit Data', style: TextStyle(fontSize: 18)),
                     ),
                   const SizedBox(height: 20),
+                  ], // end if (monitorState == MonitorState.idle)
 
                   // Result or error text
                   Text(
