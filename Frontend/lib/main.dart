@@ -92,11 +92,6 @@ class _PredictionScreenState extends State<PredictionScreen>
 
     setState(() => _isFinalSubmit = true);
 
-    print("SUBMIT DEBUG:");
-    print("user_id = $userId");
-    print("bpm = $bpm");
-    print("spo2 = $spo2");
-
     final response = await http.post(
       Uri.parse("https://smartheart-backend.onrender.com/submit-reading"),
       headers: {"Content-Type": "application/json"},
@@ -108,10 +103,7 @@ class _PredictionScreenState extends State<PredictionScreen>
       }),
     );
 
-    print("Response status: ${response.statusCode}");
-    print("Response body: ${response.body}");
-
-    if (response.statusCode == 200) {
+    if (response.statusCode == 200 || response.statusCode == 201) {
       setState(() {
         monitorState = MonitorState.idle;
         _isFinalSubmit = false;
@@ -119,7 +111,7 @@ class _PredictionScreenState extends State<PredictionScreen>
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('✔️ Data submitted successfully'),
+          content: Text('Data submitted successfully'),
           backgroundColor: Colors.green.shade700,
           behavior: SnackBarBehavior.floating,
           duration: Duration(seconds: 2),
@@ -130,7 +122,7 @@ class _PredictionScreenState extends State<PredictionScreen>
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('❌ Failed to submit data'),
+          content: Text('Failed to submit data'),
           backgroundColor: Colors.redAccent,
           behavior: SnackBarBehavior.floating,
           duration: Duration(seconds: 2),
