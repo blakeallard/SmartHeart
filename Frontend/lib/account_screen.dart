@@ -3,6 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:fl_chart/fl_chart.dart';
+import 'auth_screen.dart';
+import 'prediction_screen.dart';
 
 class AccountScreen extends StatefulWidget {
   @override
@@ -31,7 +33,11 @@ class _AccountScreenState extends State<AccountScreen> {
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
-    Navigator.of(context).pushReplacementNamed('/login');
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => AuthScreen()),
+      (route) => false,
+    );
   }
 
   Future<void> fetchReadings() async {
@@ -141,6 +147,17 @@ class _AccountScreenState extends State<AccountScreen> {
                       ),
                     ),
 
+                    SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/prediction');
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueGrey,
+                        padding: EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                      ),
+                      child: Text("Back to Monitor", style: TextStyle(fontSize: 16)),
+                    ),
                     SizedBox(height: 20),
                     ElevatedButton(
                       onPressed: logout,
