@@ -204,6 +204,25 @@ def get_readings():
 
 
 # Background thread to read sensor data over serial and emit via WebSocket
+@app.route("/stream", methods=["POST"])
+def stream_waveform():
+    try:
+        data = request.get_json()
+        bpm = int(data.get("bpm"))
+        spo2 = int(data.get("spo2"))
+
+        socketio.emit("waveform", {
+            "bpm": bpm,
+            "spo2": spo2
+        })
+
+        return jsonify({"message": "Waveform emitted"}), 200
+
+    except Exception as e:
+        print("[ERROR] in /stream:", e)
+        return jsonify({"error": str(e)}), 500
+    
+'''
 def stream_waveform_data():
     try:
         ser = serial.Serial('/dev/cu.usbmodem1101', 115200)
@@ -228,6 +247,7 @@ def stream_waveform_data():
         except Exception as e:
             print(f"Error reading from serial: {e}")
             break  # Prevent infinite loop
+'''
 
 # Create DB tables if they don’t exist
 def init_db():
@@ -247,6 +267,8 @@ def manual_init_db():
 if __name__ == "__main__":
     print("Starting Flask API server with WebSocket...")
     init_db()
+    '''
     threading.Thread(target=stream_waveform_data, daemon=True).start()
+    '''
     port = int(os.environ.get("PORT", 5050))  # fallback to 5051 locally
     socketio.run(app, host="0.0.0.0", port=port)
