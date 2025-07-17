@@ -11,11 +11,11 @@ from sqlalchemy.exc import IntegrityError  # For catching database errors (e.g.,
 from werkzeug.security import generate_password_hash, check_password_hash  # Password hashing
 
 
-import joblib     # For loading the trained ML model
-import csv        # For reading BPM logs from CSV
-import threading  # To run background waveform streaming
+import joblib        # For loading the trained ML model
+import csv           # For reading BPM logs from CSV
+import threading     # To run background waveform streaming
 import time
-import serial     # To read serial data from hardware (e.g. ESP32)
+import serial        # To read serial data from hardware (e.g. ESP32)
 import pandas as pd  # For preparing model input from JSON
 
 
