@@ -21,7 +21,7 @@ import pandas as pd  # For preparing model input from JSON
 
 # ========== FLASK APP SETUP ==========
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")  # Render env var or fallback
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "postgresql://smartheart_db_user:oXyFH5b48Q78PLZtc7xiY7hIAkLGh1PJ@dpg-d1oq4pjuibrs73d2b8ag-a.oregon-postgres.render.com/smartheart_db")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 # ========== DATABASE SETUP ==========
@@ -51,7 +51,7 @@ CSV_PATH = "bpm_log.csv"
 
 # ========== LOAD ML MODEL ==========
 try:
-    model = joblib.load("model.pkl")
+    model = joblib.load("Backend/model.pkl")
 except Exception as e:
     print("Could not load model.pkl:", e)
     model = None
@@ -84,31 +84,30 @@ def predict():
     X_input = pd.DataFrame([[bpm, spo2]], columns=['BPM', 'SpO2'])
     prediction = model.predict(X_input)[0]
 
-    return jsonify({"prediction": prediction})
+    return jsonify({"prediction": int(prediction)})
 
-
-# Get latest row from CSV for display on app startup
 @app.route("/latest-data", methods=["GET"])
 def latest_data():
-    if not os.path.exists(CSV_PATH):
-        return jsonify({"error": "No CSV data found"}), 404
+    user_id = request.args.get("user_id")
+
+    if not user_id:
+        return jsonify({"error": "Missing user_id"}), 400
 
     try:
-        with open(CSV_PATH, "r") as file:
-            reader = csv.DictReader(file)
-            rows = list(reader)
-            if not rows:
-                return jsonify({"error": "CSV is empty"}), 404
-            last_row = rows[-1]
-            return jsonify({
-                "bpm": int(last_row["BPM"]),
-                "spo2": int(last_row.get("SpO2", 98))  # fallback if missing
-            })
+        # Fetch most recent reading from the database
+        reading = Reading.query.filter_by(user_id=user_id).order_by(Reading.timestamp.desc()).first()
+        if not reading:
+            return jsonify({"error": "No readings found"}), 404
+
+        return jsonify({
+            "bpm": reading.bpm,
+            "spo2": reading.spo2,
+            "timestamp": reading.timestamp
+        }), 200
+
     except Exception as e:
-        return jsonify({"error": f"Failed to read CSV: {e}"}), 500
-
-
-# Signup route for registering new users
+        return jsonify({"error": f"Failed to fetch reading: {e}"}), 500
+    
 @app.route("/signup", methods=["POST"])
 def signup():
     data = request.json
@@ -165,12 +164,18 @@ def submit_reading():
         return jsonify({"error": "Missing fields"}), 400
 
     try:
-        reading = Reading(user_id=user_id, bpm=bpm, spo2=spo2, timestamp=timestamp)
+        reading = Reading(
+            user_id=int(user_id),
+            bpm=int(bpm),
+            spo2=int(spo2),
+            timestamp=timestamp
+        )
         db.session.add(reading)
         db.session.commit()
         return jsonify({"message": "Reading saved"}), 201
     except Exception as e:
         db.session.rollback()
+        print(f"[ERROR] Failed to save reading: {e}")  # <--- Add this line
         return jsonify({"error": f"Failed to save reading: {e}"}), 500
 
 
@@ -227,12 +232,21 @@ def stream_waveform_data():
 # Create DB tables if they don’t exist
 def init_db():
     with app.app_context():
+        print("[DEBUG] Initializaing database...")
         db.create_all()
+        print("[DEBUG] Database tables created.")
 
+@app.route("/init-db", methods=["POST"])
+def manual_init_db():
+    try:
+        db.create_all()
+        return jsonify({"message": "Database initialized"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-# ========== ENTRY POINT ==========
 if __name__ == "__main__":
     print("Starting Flask API server with WebSocket...")
     init_db()
     threading.Thread(target=stream_waveform_data, daemon=True).start()
-    socketio.run(app, host="0.0.0.0", port=5051)
+    port = int(os.environ.get("PORT", 5050))  # fallback to 5051 locally
+    socketio.run(app, host="0.0.0.0", port=port)

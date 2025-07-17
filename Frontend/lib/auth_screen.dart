@@ -16,18 +16,13 @@ class _AuthScreenState extends State<AuthScreen> {
   bool isLogin = true;  // Tracks if we’re in login or signup mode
   final usernameController = TextEditingController();
   final passwordController = TextEditingController();
-  String message = "";  // Used to show error/success messages
+  String message = "";
 
+Future<void> handleAuth() async {
+  final url = Uri.parse("https://smartheart-backend.onrender.com/${isLogin ? 'login' : 'signup'}");
 
-  // Handle login/signup button press
-  Future<void> handleAuth() async {
-    // Determine which endpoint to use based on mode
-    final url = Uri.parse(
-      "https://smartheart.onrender.com/${isLogin ? 'login' : 'signup'}",
-    );
-
-
-    // Send HTTP POST request to Flask API
+  try {
+    // ✅ Submit the request to Flask API
     final response = await http.post(
       url,
       headers: {"Content-Type": "application/json"},
@@ -37,39 +32,35 @@ class _AuthScreenState extends State<AuthScreen> {
       }),
     );
 
+    // Decode JSON response only once
+    final data = jsonDecode(response.body);
 
-    try {
-      // Decode the JSON response from the server
-      final data = jsonDecode(response.body);
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      setState(() => message = data["message"] ?? "Success");
 
+      // Save user_id if login was successful
+      if (isLogin && data["user_id"] != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt("user_id", data["user_id"]);
+        await prefs.setString("username", usernameController.text);
 
-      // If successful login/signup
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        setState(() => message = data["message"] ?? "Success");
-
-
-        // If it's a login and we got a user_id, store credentials locally
-        if (isLogin && data["user_id"] != null) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setInt("user_id", data["user_id"]);
-          await prefs.setString("username", usernameController.text);
-
-
-          // Navigate to PredictionScreen
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => PredictionScreen()),
-          );
-        }
-      } else {
-        // Handle failure with server-provided error message
-        setState(() => message = data["error"] ?? "Something went wrong");
+        // Navigate to Prediction screen
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => PredictionScreen()),
+        );
       }
-    } catch (e) {
-      // If decoding JSON fails
-      setState(() => message = "Invalid response: ${response.body}");
+
+    } else {
+      // Error returned from backend
+      setState(() => message = data["error"] ?? "Something went wrong");
     }
+
+  } catch (e) {
+    // Failed to decode or network error
+    setState(() => message = "Invalid response: $e");
   }
+}
 
   @override
   Widget build(BuildContext context) {

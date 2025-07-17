@@ -6,34 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_screen.dart';
 import 'account_screen.dart';
 
-void main() 
-{
-  runApp(HeartMonitorApp());
-}
-
-// Root of the Flutter application
-class HeartMonitorApp extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Heart & O2 Monitor',
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: Colors.black,
-        fontFamily: 'SF Pro Display',
-      ),
-      initialRoute: '/login',
-      routes: {
-        '/login': (context) => AuthScreen(),
-        '/account': (context) => AccountScreen(),
-        '/prediction': (context) => PredictionScreen(),
-      },
-    );
-  }
-}
-
-// Main screen showing predictions and live bpm & sp02 data
 class PredictionScreen extends StatefulWidget {
   @override
   _PredictionScreenState createState() => _PredictionScreenState();
@@ -54,7 +26,6 @@ class _PredictionScreenState extends State<PredictionScreen>
     super.initState();
     fetchLatestDataFromDB();
 
-    // Set up pulse animation
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -64,21 +35,18 @@ class _PredictionScreenState extends State<PredictionScreen>
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
 
-    // Connect to WebSocket server for live updates
     socket = IO.io('https://smartheart.onrender.com', {
       'transports': ['websocket'],
       'autoConnect': true,
     });
 
     socket.on('waveform', (data) {
-      if (data["bpm"] != null && data["spo2"] != null) 
-      {
+      if (data["bpm"] != null && data["spo2"] != null) {
         setState(() {
-          bpm  = data["bpm"];
+          bpm = data["bpm"];
           spo2 = data["spo2"];
           waveformPoints.add(bpm);
-          if (waveformPoints.length > 50) 
-          {
+          if (waveformPoints.length > 50) {
             waveformPoints.removeAt(0);
           }
 
@@ -95,23 +63,18 @@ class _PredictionScreenState extends State<PredictionScreen>
   }
 
   @override
-  void dispose() 
-  {
+  void dispose() {
     _controller.dispose();
     socket.disconnect();
     super.dispose();
   }
 
-  // Fetch most recent reading from server
-  Future<void> fetchLatestDataFromDB() async 
-  {
-    final prefs  = await SharedPreferences.getInstance();
+  Future<void> fetchLatestDataFromDB() async {
+    final prefs = await SharedPreferences.getInstance();
     final userId = prefs.getInt('user_id');
 
-    if (userId == null) 
-    {
-      setState(() 
-      {
+    if (userId == null) {
+      setState(() {
         result = "No user ID found in SharedPreferences.";
       });
       return;
@@ -119,21 +82,17 @@ class _PredictionScreenState extends State<PredictionScreen>
 
     final url = Uri.parse("https://smartheart-backend.onrender.com/latest-data?user_id=$userId");
 
-    try 
-    {
+    try {
       final response = await http.get(url);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        setState(() 
-        {
+        setState(() {
           bpm = data['bpm'];
           spo2 = data['spo2'];
           result = "Last recorded: BPM ${data['bpm']}, SpO₂ ${data['spo2']}%";
         });
-      } else 
-      {
-        setState(() 
-        {
+      } else {
+        setState(() {
           result = "Failed to fetch: ${response.statusCode}";
         });
       }
@@ -142,124 +101,107 @@ class _PredictionScreenState extends State<PredictionScreen>
         result = "Error: $e";
       });
     }
-  } // end fetchLatestDataFromDB
-
-  // Send current reading to Flask API and get prediction
-bool _isSubmitting = false;           // add to your state
-int? _lastSubmittedBpm;
-int? _lastSubmittedSpo2;
-
-Future<void> sendPredictionRequest(int bpm, int spo2) async {
-  if (_isSubmitting) return;
-  if (bpm == _lastSubmittedBpm && spo2 == _lastSubmittedSpo2) {
-    print("Duplicate reading. Skipping submission.");
-    setState(() {
-      result = "Same reading already submitted.";
-    });
-    return;
   }
 
-  setState(() => _isSubmitting = true);
+  bool _isSubmitting = false;
+  int? _lastSubmittedBpm;
+  int? _lastSubmittedSpo2;
 
-  final predictUrl = Uri.parse('https://smartheart-backend.onrender.com/predict');
-  final readingUrl = Uri.parse('https://smartheart-backend.onrender.com/submit-reading');
-
-  try {
-    final response = await http.post(
-      predictUrl,
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"bpm": bpm, "spo2": spo2}),
-    );
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      final prediction = data['prediction'];
-
+  Future<void> sendPredictionRequest(int bpm, int spo2) async {
+    if (_isSubmitting) return;
+    if (bpm == _lastSubmittedBpm && spo2 == _lastSubmittedSpo2) {
+      print("Duplicate reading. Skipping submission.");
       setState(() {
-        if (prediction == 1) {
-          result = "Prediction: Healthy";
-        } else if (prediction == 0) {
-          result = "Prediction: Not Healthy";
-        } else {
-          result = "Prediction: Unknown";
-        }
-
-        // mark this reading as last submitted
-        _lastSubmittedBpm = bpm;
-        _lastSubmittedSpo2 = spo2;
+        result = "Same reading already submitted. Check account history.";
       });
-
-      final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getInt('user_id');
-
-      if (userId != null) {
-        await http.post(
-          readingUrl,
-          headers: {"Content-Type": "application/json"},
-          body: jsonEncode({
-            "user_id": userId,
-            "bpm": bpm,
-            "spo2": spo2,
-            "timestamp": DateTime.now().toIso8601String(),
-          }),
-        );
-      } else {
-        print("No user_id found in SharedPreferences");
-      }
-    } else {
-      setState(() {
-        result = "Server Error: ${response.statusCode}";
-      });
+      return;
     }
-  } catch (e) {
-    setState(() {
-      result = "Error: $e";
-    });
-  } finally {
-    setState(() => _isSubmitting = false);
-  }
-}
 
-  // Main UI build method
+    setState(() => _isSubmitting = true);
+
+    final predictUrl = Uri.parse('https://smartheart-backend.onrender.com/predict');
+    final readingUrl = Uri.parse('https://smartheart-backend.onrender.com/submit-reading');
+
+    try {
+      final response = await http.post(
+        predictUrl,
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"bpm": bpm, "spo2": spo2}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final prediction = data['prediction'];
+
+        setState(() {
+          if (prediction == 1) {
+            result = "Prediction: Healthy";
+          } else if (prediction == 0) {
+            result = "Prediction: Not Healthy";
+          } else {
+            result = "Prediction: Unknown";
+          }
+
+          _lastSubmittedBpm = bpm;
+          _lastSubmittedSpo2 = spo2;
+        });
+
+        final prefs = await SharedPreferences.getInstance();
+        final userId = prefs.getInt('user_id');
+
+        if (userId != null) {
+          await http.post(
+            readingUrl,
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({
+              "user_id": userId,
+              "bpm": bpm,
+              "spo2": spo2,
+              "timestamp": DateTime.now().toIso8601String(),
+            }),
+          );
+        } else {
+          print("No user_id found in SharedPreferences");
+        }
+      } else {
+        setState(() {
+          result = "Server Error: ${response.statusCode}";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        result = "Error: $e";
+      });
+    } finally {
+      setState(() => _isSubmitting = false);
+      Navigator.pushNamed(context, '/account');
+    }
+  }
+
   @override
-  Widget build(BuildContext context) 
-  {
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('SmartHeart Health Monitor'),
+        title: const Text('Health Monitor'),
         backgroundColor: Colors.redAccent.shade700,
         centerTitle: true,
         actions: [
           IconButton(
             icon: const Icon(Icons.account_circle),
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => AccountScreen()),
-              ); // end Navigator.push
-            }, // end onPressed
-          ), // end IconButton
-        ], // end actions
-      ), // end AppBar
+              Navigator.pushNamed(context, '/account');
+            },
+          ),
+        ],
+      ),
       body: Stack(
         children: [
-          // Load Home Screen Background Image
-          Positioned.fill
-          (
-            child: Image.asset
-            (
-              'assets/backgrounds/home_background.jpg',
-              fit: BoxFit.cover,
-            ), // end Image.asset
-          ), // end Positioned.fill
-
-          // Optional dark overlay for better contrast
-          Positioned.fill
-          (
+          Positioned.fill(
+            child: Image.asset('assets/backgrounds/home_background.jpg', fit: BoxFit.cover),
+          ),
+          Positioned.fill(
             child: Container(color: Colors.black.withOpacity(0.3)),
           ),
-
-          // Pulse animation background
           Center(
             child: ScaleTransition(
               scale: _pulseAnimation,
@@ -276,15 +218,12 @@ Future<void> sendPredictionRequest(int bpm, int spo2) async {
               ),
             ),
           ),
-
-          // Foreground UI
           Center(
             child: Padding(
               padding: const EdgeInsets.all(24.0),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Animated heart icon
                   ScaleTransition(
                     scale: _pulseAnimation,
                     child: ShaderMask(
@@ -292,8 +231,7 @@ Future<void> sendPredictionRequest(int bpm, int spo2) async {
                         return RadialGradient(
                           center: Alignment.topLeft,
                           radius: 1.0,
-                          colors: 
-                          [
+                          colors: [
                             Colors.redAccent.shade200,
                             Colors.redAccent.shade700,
                             Colors.black,
@@ -306,19 +244,14 @@ Future<void> sendPredictionRequest(int bpm, int spo2) async {
                     ),
                   ),
                   const SizedBox(height: 30),
-
-                  // BPM display
-                  Row
-                  (
+                  Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Icon(Icons.monitor_heart, color: Colors.redAccent, size: 30),
                       const SizedBox(width: 8),
                       Text('BPM: $bpm', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w600)),
                     ],
-                  ), // end Row for BPM display
-
-                  // SpO2 display
+                  ),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -326,41 +259,32 @@ Future<void> sendPredictionRequest(int bpm, int spo2) async {
                       const SizedBox(width: 8),
                       Text('SpO₂: $spo2%', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w600)),
                     ],
-                  ), // end Row for SpO2 display
-
+                  ),
                   const SizedBox(height: 20),
-
-                  // Real-time waveform display
                   SizedBox(
                     height: 100,
                     width: double.infinity,
                     child: CustomPaint(painter: WaveformPainter(waveformPoints)),
                   ),
-
                   const SizedBox(height: 20),
-
-                  // Submit to API button
-                  // Implemented with loading state and duplicate prevention
-                    ElevatedButton(
+                  ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _isSubmitting ? Colors.grey : Colors.redAccent,
                       padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 16),
                     ),
                     onPressed: _isSubmitting ? null : () => sendPredictionRequest(bpm, spo2),
                     child: _isSubmitting
-                      ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                        )
-                      : const Text('Submit Data', style: TextStyle(fontSize: 18)),
-                    ),
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text('Submit Data', style: TextStyle(fontSize: 18)),
+                  ),
                   const SizedBox(height: 20),
-
-                  // Result or error text
                   Text(
                     result,
                     style: TextStyle(
@@ -380,7 +304,6 @@ Future<void> sendPredictionRequest(int bpm, int spo2) async {
   }
 }
 
-// Custom painter for drawing BPM waveform
 class WaveformPainter extends CustomPainter {
   final List<int> points;
   WaveformPainter(this.points);
@@ -391,8 +314,7 @@ class WaveformPainter extends CustomPainter {
       ..color = Colors.redAccent
       ..strokeWidth = 2;
 
-    for (int i = 0; i < points.length - 1; i++) 
-    {
+    for (int i = 0; i < points.length - 1; i++) {
       final x1 = i * (size.width / points.length);
       final y1 = size.height - (points[i].toDouble() * size.height / 150);
       final x2 = (i + 1) * (size.width / points.length);
