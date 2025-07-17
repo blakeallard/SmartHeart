@@ -92,6 +92,11 @@ class _PredictionScreenState extends State<PredictionScreen>
 
     setState(() => _isFinalSubmit = true);
 
+    print("SUBMIT DEBUG:");
+    print("user_id = $userId");
+    print("bpm = $bpm");
+    print("spo2 = $spo2");
+
     final response = await http.post(
       Uri.parse("https://smartheart-backend.onrender.com/submit-reading"),
       headers: {"Content-Type": "application/json"},
@@ -102,6 +107,9 @@ class _PredictionScreenState extends State<PredictionScreen>
         "timestamp": DateTime.now().toIso8601String(),
       }),
     );
+
+    print("Response status: ${response.statusCode}");
+    print("Response body: ${response.body}");
 
     if (response.statusCode == 200) {
       setState(() {
