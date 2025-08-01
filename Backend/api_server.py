@@ -3,20 +3,17 @@ import os
 import eventlet
 eventlet.monkey_patch()  # Allows Flask-SocketIO to work with threading and sockets
 
-
 from flask             import Flask, request, jsonify  # Core Flask modules for web server and API endpoints
 from flask_socketio    import SocketIO                 # WebSocket support
 from flask_sqlalchemy  import SQLAlchemy               # ORM to interact with a PostgreSQL database
 from sqlalchemy.exc    import IntegrityError           # For catching database errors (e.g., duplicate username)
 from werkzeug.security import generate_password_hash, check_password_hash  # Password hashing
 
-
 import joblib        # For loading the trained ML model
 import csv           # For reading BPM logs from CSV
 import threading     # To run background waveform streaming
 import time
 import pandas as pd  # For preparing model input from JSON
-
 
 # ========== FLASK APP SETUP ==========
 app = Flask(__name__)
@@ -55,14 +52,12 @@ except Exception as e:
     print("Could not load model.pkl:", e)
     model = None
 
-
 # ========== ROUTES / API ENDPOINTS ==========
 
 # Home route for health check
 @app.route("/")
 def home():
     return "Heart Monitor API is live!"
-
 
 # Predict endpoint: receives BPM and SpO₂, runs through ML model
 @app.route("/predict", methods=["POST"])
@@ -93,10 +88,10 @@ def latest_data():
         return jsonify({"error": "Missing user_id"}), 400
 
     try:
-        # Fetch most recent reading from the database
-        reading = Reading.query.filter_by(user_id=user_id).order_by(Reading.timestamp.desc()).first()
+        # Fetch most recent NON-ZERO BPM reading from the database
+        reading = Reading.query.filter_by(user_id=user_id).filter(Reading.bpm > 0).order_by(Reading.timestamp.desc()).first()
         if not reading:
-            return jsonify({"error": "No readings found"}), 404
+            return jsonify({"error": "No valid readings found"}), 404
 
         return jsonify({
             "bpm": reading.bpm,
@@ -106,7 +101,7 @@ def latest_data():
 
     except Exception as e:
         return jsonify({"error": f"Failed to fetch reading: {e}"}), 500
-    
+
 @app.route("/signup", methods=["POST"])
 def signup():
     data = request.json
@@ -126,7 +121,6 @@ def signup():
     except IntegrityError:
         db.session.rollback()
         return jsonify({"error": "Username already exists"}), 409
-
 
 # Login route for authenticating existing users
 @app.route("/login", methods=["POST"])
@@ -148,7 +142,6 @@ def login():
         }), 200
     else:
         return jsonify({"error": "Invalid credentials"}), 401
-
 
 # Submit a reading to the database
 @app.route("/submit-reading", methods=["POST"])
@@ -199,7 +192,6 @@ def submit_reading():
         print(f"[ERROR] Failed to save reading: {e}")  
         return jsonify({"error": f"Failed to save reading: {e}"}), 500
 
-
 # Get most recent 50 readings for a user
 @app.route("/get-readings", methods=["GET"])
 def get_readings():
@@ -222,7 +214,6 @@ def get_readings():
         return jsonify({"readings": readings})
     except Exception as e:
         return jsonify({"error": f"Failed to fetch readings: {e}"}), 500
-
 
 # Background thread to read sensor data over serial and emit via WebSocket
 @app.route("/stream", methods=["POST"])
@@ -267,9 +258,8 @@ def stream_waveform():
     except Exception as e:
         print(f"[ERROR] in /stream: {e}")
         return jsonify({"error": str(e)}), 500
-    
 
-# Create DB tables if they don’t exist
+# Create DB tables if they don't exist
 def init_db():
     with app.app_context():
         print("[DEBUG] Initializaing database...")
