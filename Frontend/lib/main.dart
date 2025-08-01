@@ -170,23 +170,24 @@ return ElevatedButton(
     );
 
     // Connect to WebSocket server for live updates
-    socket = IO.io('https://smartheart.onrender.com', {
+    socket = IO.io('https://smartheart-backend.onrender.com', {
       'transports': ['websocket'],
       'autoConnect': true,
     });
 
     socket.on('waveform', (data) {
-      if (data["bpm"] != null && data["spo2"] != null) 
-      {
+      print("[DEBUG] Received waveform data: $data");
+      
+      // Handle BPM data (required)
+      if (data["bpm"] != null) {
         setState(() {
-          bpm  = data["bpm"];
-          spo2 = data["spo2"];
+          bpm = data["bpm"];
           waveformPoints.add(bpm);
-          if (waveformPoints.length > 50) 
-          {
+          if (waveformPoints.length > 50) {
             waveformPoints.removeAt(0);
           }
 
+          // Update pulse animation based on BPM
           double scaleMin = 0.9;
           double scaleMax = bpm > 100 ? 1.3 : 1.1;
           _pulseAnimation = Tween<double>(begin: scaleMin, end: scaleMax).animate(
@@ -194,6 +195,13 @@ return ElevatedButton(
           );
           _controller.duration = Duration(milliseconds: (60000 ~/ bpm).clamp(600, 2000));
           if (!_controller.isAnimating) _controller.repeat(reverse: true);
+        });
+      }
+      
+      // Handle SpO2 data (optional)
+      if (data["spo2"] != null) {
+        setState(() {
+          spo2 = data["spo2"];
         });
       }
     });

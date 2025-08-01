@@ -1,13 +1,13 @@
 # ========== IMPORTS ==========
 import os
 import eventlet
-eventlet.monkey_patch()  # Allows Flask-SocketIO to work properly with threading and sockets
+eventlet.monkey_patch()  # Allows Flask-SocketIO to work with threading and sockets
 
 
-from flask import Flask, request, jsonify  # Core Flask modules for web server and API endpoints
-from flask_socketio import SocketIO        # WebSocket support
-from flask_sqlalchemy import SQLAlchemy    # ORM to interact with a PostgreSQL database
-from sqlalchemy.exc import IntegrityError  # For catching database errors (e.g., duplicate username)
+from flask             import Flask, request, jsonify  # Core Flask modules for web server and API endpoints
+from flask_socketio    import SocketIO                 # WebSocket support
+from flask_sqlalchemy  import SQLAlchemy               # ORM to interact with a PostgreSQL database
+from sqlalchemy.exc    import IntegrityError           # For catching database errors (e.g., duplicate username)
 from werkzeug.security import generate_password_hash, check_password_hash  # Password hashing
 
 
@@ -15,7 +15,6 @@ import joblib        # For loading the trained ML model
 import csv           # For reading BPM logs from CSV
 import threading     # To run background waveform streaming
 import time
-import serial        # To read serial data from hardware (e.g. ESP32)
 import pandas as pd  # For preparing model input from JSON
 
 
@@ -30,18 +29,18 @@ db = SQLAlchemy(app)
 # User table schema
 class User(db.Model):
     __tablename__ = 'users'
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(100), unique=True, nullable=False)
-    password = db.Column(db.String(200), nullable=False)
+    id            = db.Column(db.Integer, primary_key=True)
+    username      = db.Column(db.String(100), unique=True, nullable=False)
+    password      = db.Column(db.String(200), nullable=False)
 
 # Reading table schema (each row = 1 health record)
 class Reading(db.Model):
     __tablename__ = 'readings'
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
-    bpm = db.Column(db.Integer)
-    spo2 = db.Column(db.Integer)
-    timestamp = db.Column(db.String)  # Optional: consider changing to DateTime
+    id            = db.Column(db.Integer, primary_key=True)
+    user_id       = db.Column(db.Integer, db.ForeignKey('users.id'))
+    bpm           = db.Column(db.Integer)
+    spo2          = db.Column(db.Integer)
+    timestamp     = db.Column(db.String)  # Optional: consider changing to DateTime
 
 # WebSocket support with CORS enabled for frontend
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -71,7 +70,7 @@ def predict():
     data = request.json
     print("Incoming data:", data)
 
-    bpm = data.get("bpm")
+    bpm  = data.get("bpm")
     spo2 = data.get("spo2")
 
     if bpm is None or spo2 is None:
@@ -154,25 +153,47 @@ def login():
 # Submit a reading to the database
 @app.route("/submit-reading", methods=["POST"])
 def submit_reading():
-    data      = request.json
-    user_id   = int(data.get("user_id"))
-    bpm       = int(data.get("bpm"))
-    spo2      = int(data.get("spo2"))
+    data = request.json
+    print(f"[DEBUG] /submit-reading received: {data}")
+    
+    # Extract and validate required fields
+    user_id = data.get("user_id")
+    bpm = data.get("bpm")
+    spo2 = data.get("spo2")
     timestamp = data.get("timestamp")
 
-    if not all([user_id, bpm, spo2, timestamp]):
-        return jsonify({"error": "Missing fields"}), 400
+    # Validate required fields
+    if user_id is None or bpm is None or timestamp is None:
+        return jsonify({"error": "Missing required fields: user_id, bpm, or timestamp"}), 400
 
     try:
-        reading       = Reading(
-            user_id   = int(user_id),
-            bpm       = int(bpm),
-            spo2      = int(spo2),
-            timestamp = timestamp
+        # Convert and validate data types
+        user_id = int(user_id)
+        bpm = int(bpm)
+        
+        # Handle SpO2 (optional)
+        if spo2 is not None:
+            try:
+                spo2 = int(spo2)
+            except (ValueError, TypeError):
+                spo2 = None  # Set to None if invalid
+        else:
+            spo2 = None  # No SpO2 data provided
+
+        reading = Reading(
+            user_id=user_id,
+            bpm=bpm,
+            spo2=spo2,
+            timestamp=timestamp
         )
         db.session.add(reading)
         db.session.commit()
-        return jsonify({"message": "Reading saved"}), 201
+        
+        print(f"[DEBUG] Successfully saved reading: BPM={bpm}, SpO2={spo2}")
+        return jsonify({"message": "Reading saved", "data": {"bpm": bpm, "spo2": spo2}}), 201
+        
+    except (ValueError, TypeError) as e:
+        return jsonify({"error": f"Invalid data type: {e}"}), 400
     except Exception as e:
         db.session.rollback()
         print(f"[ERROR] Failed to save reading: {e}")  
@@ -208,46 +229,45 @@ def get_readings():
 def stream_waveform():
     try:
         data = request.get_json()
-        bpm = int(data.get("bpm"))
-        spo2 = int(data.get("spo2"))
+        print(f"[DEBUG] /stream received data: {data}")
+        
+        bpm = data.get("bpm")
+        spo2 = data.get("spo2")
+        
+        # Handle missing or invalid BPM data
+        if bpm is None:
+            return jsonify({"error": "Missing BPM data"}), 400
+            
+        try:
+            bpm = int(bpm)
+        except (ValueError, TypeError):
+            return jsonify({"error": "Invalid BPM value"}), 400
+        
+        # Handle SpO2 data (optional)
+        if spo2 is not None:
+            try:
+                spo2 = int(spo2)
+            except (ValueError, TypeError):
+                spo2 = None  # Set to None if invalid
+        else:
+            spo2 = None  # No SpO2 data provided
 
-        socketio.emit("waveform", {
+        # Emit waveform data
+        waveform_data = {
             "bpm": bpm,
-            "spo2": spo2
-        })
+            "spo2": spo2,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        socketio.emit("waveform", waveform_data)
+        print(f"[DEBUG] Emitted waveform: {waveform_data}")
 
-        return jsonify({"message": "Waveform emitted"}), 200
+        return jsonify({"message": "Waveform emitted", "data": waveform_data}), 200
 
     except Exception as e:
-        print("[ERROR] in /stream:", e)
+        print(f"[ERROR] in /stream: {e}")
         return jsonify({"error": str(e)}), 500
     
-'''
-def stream_waveform_data():
-    try:
-        ser = serial.Serial('/dev/cu.usbmodem1101', 115200)
-        print("Serial port opened successfully!")
-    except Exception as e:
-        ser = None
-        print(f"Serial connection failed: {e}")
-        return  # Exit thread gracefully
-
-    while True:
-        try:
-            line = ser.readline().decode().strip()
-            if line:
-                try:
-                    bpm_val, spo2_val = map(int, line.split(","))
-                    socketio.emit("waveform", {
-                        "bpm": bpm_val,
-                        "spo2": spo2_val
-                    })
-                except ValueError:
-                    continue  # Ignore malformed lines
-        except Exception as e:
-            print(f"Error reading from serial: {e}")
-            break  # Prevent infinite loop
-'''
 
 # Create DB tables if they don’t exist
 def init_db():
@@ -267,8 +287,5 @@ def manual_init_db():
 if __name__ == "__main__":
     print("Starting Flask API server with WebSocket...")
     init_db()
-    '''
-    threading.Thread(target=stream_waveform_data, daemon=True).start()
-    '''
-    port = int(os.environ.get("PORT", 5050))  # fallback to 5051 locally
+    port = int(os.environ.get("PORT", 5050))  # fallback to 5050 locally
     socketio.run(app, host="0.0.0.0", port=port)

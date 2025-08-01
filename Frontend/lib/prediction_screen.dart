@@ -35,7 +35,7 @@ class _PredictionScreenState extends State<PredictionScreen>
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
 
-    socket = IO.io('https://smartheart.onrender.com', {
+    socket = IO.io('https://smartheart-backend.onrender.com', {
       'transports': ['websocket'],
       'autoConnect': true,
     });
